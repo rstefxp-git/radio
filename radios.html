@@ -12,8 +12,8 @@
 *{box-sizing:border-box;margin:0}
 html,body{height:100%;overflow:hidden;overscroll-behavior:none;background:var(--bg);color:var(--fg);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 #main{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:calc(16px + env(safe-area-inset-top)) 24px calc(16px + env(safe-area-inset-bottom));touch-action:none;user-select:none;-webkit-user-select:none;cursor:pointer}
-#logo{width:min(56vw,46vh,260px);aspect-ratio:1;border-radius:24px;background:var(--card);display:grid;place-items:center;font-size:84px;color:var(--mut);overflow:hidden}
-#logo img{width:100%;height:100%;object-fit:contain}
+#logo{width:min(56vw,46vh,260px);aspect-ratio:1;border-radius:24px;background:var(--card);display:grid;place-items:center;font-size:72px;font-weight:700;color:#fff;overflow:hidden}
+#fn{color:var(--mut);font-size:15px;text-align:center;margin-top:-10px}
 #nm{font-size:22px;font-weight:600;text-align:center;max-width:100%}
 #sub{color:var(--mut);font-size:14px;min-height:20px;text-align:center}
 #pp{width:84px;height:84px;border-radius:50%;border:2px solid var(--ac);color:var(--ac);display:grid;place-items:center;font-size:30px;margin-top:6px}
@@ -28,7 +28,7 @@ button:hover{border-color:var(--ac)}
 .st{display:flex;gap:12px;align-items:center;padding:10px 14px;cursor:pointer;border-bottom:1px solid #1d2127}
 .st:hover{background:#191c21}
 .st.on{background:#1d2733}
-.st img{width:48px;height:48px;border-radius:8px;object-fit:contain;background:var(--card);flex:none}
+.st i{width:48px;height:48px;border-radius:8px;display:grid;place-items:center;font-style:normal;font-weight:700;font-size:15px;color:#fff;flex:none}
 .st div{min-width:0}
 .st b{display:block;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .st span{color:var(--mut);font-size:12px}
@@ -41,13 +41,14 @@ button:hover{border-color:var(--ac)}
 <div id="main">
   <div id="logo">♪</div>
   <div id="nm">Radios NC</div>
+  <div id="fn"></div>
   <div id="sub"></div>
   <div id="pp" role="button" aria-label="Lecture / pause">▶</div>
   <div id="hint">↑ ↓ changer de radio · → liste</div>
 </div>
 
 <div id="menu" class="out">
-  <div id="mh"><h1>Radios de Nouvelle-Calédonie</h1><button id="rf" title="Actualiser la liste">⟳</button><button id="mc" title="Fermer (Échap)">✕</button></div>
+  <div id="mh"><h1>Radios de Nouvelle-Calédonie</h1><button id="mc" title="Fermer (Échap)">✕</button></div>
   <div id="lst"></div>
 </div>
 
@@ -55,19 +56,27 @@ button:hover{border-color:var(--ac)}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const a=$('#a');
-let list=[],cur=-1,want=false,tries=0,menuOpen=false;
+/* ---- les radios (flux fournis) ---- */
+const list=[
+  {id:'rdk',name:'RDK',full:'Radio Djiido',url:'http://radiodjiido.nc:8004/',c:'#c0392b'},
+  {id:'rrb',name:'RRB',full:'Radio Rythme Bleu',url:'https://webradio.lagoon.nc/rrb',c:'#2f6fd0'},
+  {id:'nc1',name:'NC1',full:'Nouvelle-Calédonie La 1ère',url:'https://nouvelle-caledonie.ice.infomaniak.ch/nouvelle-caledonie-128.mp3',c:'#b8326e'},
+  {id:'ocn',name:'OCN',full:'Océane',url:'https://rocket.streamradio.fr:8120/oceane',c:'#1f9d8a'},
+  {id:'nrj',name:'NRJ',full:'NRJ Nouvelle-Calédonie',url:'https://testradio01.ice.infomaniak.ch/testradio01-192.mp3',c:'#c98a00'}
+];
+let cur=-1,want=false,tries=0,menuOpen=false;
 const LS={get(k){try{return JSON.parse(localStorage.getItem(k))}catch{return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
 
 /* ---- liaison Android (APK) : lecteur multimédia sur écran verrouillé ---- */
 function bgState(p){try{if(window.NativeBg)NativeBg.state(p,0,0)}catch{}}
-function bgMeta(s){try{if(window.NativeBg)NativeBg.meta(s.name,'Radio · Nouvelle-Calédonie',s.logo||'')}catch{}}
+function bgMeta(s){try{if(window.NativeBg)NativeBg.meta(s.name,s.full,'tile:'+s.name+':'+s.c)}catch{}}
 window.__mc=x=>{if(x==='play'){if(!want)start()}else if(x==='pause'){if(want)halt()}else if(x==='next')go(1);else if(x==='prev')go(-1)};
 /* ---- navigateur / PWA : session multimédia du système ---- */
 function ms(){
   if(!('mediaSession' in navigator))return;
   const s=list[cur];if(!s)return;
   try{
-    navigator.mediaSession.metadata=new MediaMetadata({title:s.name,artist:'Radio · Nouvelle-Calédonie',artwork:s.logo?[{src:s.logo}]:[]});
+    navigator.mediaSession.metadata=new MediaMetadata({title:s.name,artist:s.full});
     navigator.mediaSession.playbackState=want?'playing':'paused';
     navigator.mediaSession.setActionHandler('play',()=>{if(!want)start()});
     navigator.mediaSession.setActionHandler('pause',()=>{if(want)halt()});
@@ -76,54 +85,19 @@ function ms(){
   }catch{}
 }
 
-/* ---- liste des radios : annuaire Radio Browser (pays NC), mise en cache ---- */
-async function fetchStations(){
-  for(const h of ['de1','nl1','at1']){
-    const ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),7000);
-    try{
-      const r=await fetch(`https://${h}.api.radio-browser.info/json/stations/bycountrycodeexact/NC?hidebroken=true&order=clickcount&reverse=true`,{signal:ctl.signal});
-      clearTimeout(t);
-      if(r.ok){const j=await r.json();if(Array.isArray(j)&&j.length)return j}
-    }catch{clearTimeout(t)}
-  }
-  return null;
-}
-const score=s=>(s.url.startsWith('https')?1000:0)+s.kbps;
-function norm(raw){
-  const m=new Map();
-  for(const r of raw){
-    const url=r.url_resolved||r.url;if(!url||!r.name)continue;
-    const s={id:r.stationuuid,name:r.name.trim(),url,logo:r.favicon||'',kbps:r.bitrate||0,codec:r.codec||''};
-    const k=s.name.toLowerCase().replace(/[^a-z0-9]+/g,'');
-    const o=m.get(k);if(!o||score(s)>score(o))m.set(k,s);
-  }
-  return [...m.values()].sort((x,y)=>x.name.localeCompare(y.name,'fr'));
-}
-async function loadList(force){
-  const c=LS.get('st');
-  if(c&&c.list&&c.list.length)list=c.list;
-  if(force||!c||Date.now()-c.t>3*864e5){
-    status('Chargement des radios…');
-    const raw=await fetchStations();
-    if(raw){const l=norm(raw);if(l.length){list=l;LS.set('st',{t:Date.now(),list:l})}}
-  }
-}
-
 /* ---- affichage ---- */
 function status(t){$('#sub').textContent=t}
 function render(){
   const s=list[cur];
   $('#pp').textContent=want?'❚❚':'▶';
-  if(!s){$('#nm').textContent='Radios NC';$('#logo').textContent='♪';return}
-  $('#nm').textContent=s.name;
-  const lg=$('#logo');lg.textContent='';
-  if(s.logo){const im=new Image();im.alt='';im.referrerPolicy='no-referrer';im.onerror=()=>{lg.textContent=(s.name[0]||'♪').toUpperCase()};im.src=s.logo;lg.appendChild(im)}
-  else lg.textContent=(s.name[0]||'♪').toUpperCase();
+  if(!s){$('#nm').textContent='Radios NC';$('#fn').textContent='';$('#logo').textContent='♪';return}
+  $('#nm').textContent=s.name;$('#fn').textContent=s.full;
+  const lg=$('#logo');lg.textContent=s.name;lg.style.background=s.c;
   document.querySelectorAll('.st.on').forEach(e=>e.classList.remove('on'));
   const el=$(`.st[data-i="${cur}"]`);if(el)el.classList.add('on');
 }
 function renderMenu(){
-  $('#lst').innerHTML=list.length?list.map((s,i)=>`<div class="st" data-i="${i}"><img loading="lazy" referrerpolicy="no-referrer" src="${esc(s.logo)}" alt="" onerror="this.style.visibility='hidden'"><div><b>${esc(s.name)}</b><span>${esc(s.codec)}${s.kbps?' · '+s.kbps+' kbps':''}</span></div></div>`).join(''):'<p class="empty">Aucune radio. Vérifie la connexion puis touche ⟳.</p>';
+  $('#lst').innerHTML=list.map((s,i)=>`<div class="st" data-i="${i}"><i style="background:${s.c}">${esc(s.name)}</i><div><b>${esc(s.full)}</b><span>${esc(s.name)}</span></div></div>`).join('');
 }
 
 /* ---- lecture ---- */
@@ -146,7 +120,7 @@ function halt(){
   want=false;a.pause();a.removeAttribute('src');a.load();
   render();status('En pause');bgState(false);ms();
 }
-function toggle(){if(!list.length){init(true);return}want?halt():start()}
+function toggle(){want?halt():start()}
 function onFail(){
   if(!want)return;
   const s=list[cur];
@@ -170,7 +144,6 @@ $('#lst').addEventListener('click',e=>{
   want=true;select(+r.dataset.i);closeMenu();
 });
 $('#mc').addEventListener('click',closeMenu);
-$('#rf').addEventListener('click',async()=>{await loadList(true);renderMenu();render()});
 
 /* ---- gestes : haut = suivante, bas = précédente, droite = liste, tap = lecture/pause ---- */
 let sx=0,sy=0,moved=false;
@@ -198,10 +171,8 @@ addEventListener('keydown',e=>{
 });
 
 /* ---- démarrage : s'ouvre sur la dernière radio, en pause ---- */
-async function init(force){
-  await loadList(force);
+function init(){
   renderMenu();
-  if(!list.length){render();status('Radios indisponibles : touche pour réessayer');return}
   const last=LS.get('last'),i=list.findIndex(s=>s.id===last);
   cur=i<0?0:i;render();bgMeta(list[cur]);ms();status('Touche pour écouter');
 }

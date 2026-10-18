@@ -32,6 +32,9 @@ import android.app.Service;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.BitmapFactory;
 import android.graphics.drawable.Icon;
 import android.media.MediaMetadata;
@@ -149,7 +152,9 @@ public class KeepAliveService extends Service {
         if (!artUrl.equals(vid)) {
             vid = artUrl;
             art = null;
-            if (artUrl.startsWith("http")) {
+            if (artUrl.startsWith("tile:")) {
+                art = tile(artUrl);
+            } else if (artUrl.startsWith("http")) {
                 new Thread(new Runnable() {
                     @Override
                     public void run() {
@@ -177,6 +182,25 @@ public class KeepAliveService extends Service {
         KeepAliveService s = inst;
         if (s != null) {
             s.refreshOnMain();
+        }
+    }
+
+    // pochette générée : "tile:NC1:#b8326e" -> carré de couleur avec l'abréviation
+    static Bitmap tile(String spec) {
+        try {
+            String[] p = spec.split(":");
+            Bitmap bm = Bitmap.createBitmap(256, 256, Bitmap.Config.ARGB_8888);
+            Canvas cv = new Canvas(bm);
+            cv.drawColor(Color.parseColor(p.length > 2 ? p[2] : "#2f6fd0"));
+            Paint pt = new Paint(Paint.ANTI_ALIAS_FLAG);
+            pt.setColor(Color.WHITE);
+            pt.setTextAlign(Paint.Align.CENTER);
+            pt.setFakeBoldText(true);
+            pt.setTextSize(p[1].length() > 3 ? 70 : 96);
+            cv.drawText(p[1], 128, 128 + pt.getTextSize() / 3, pt);
+            return bm;
+        } catch (Exception e) {
+            return null;
         }
     }
 
@@ -409,6 +433,8 @@ public class MainActivity extends BridgeActivity {
 m = "android/app/src/main/AndroidManifest.xml"
 s = open(m, encoding="utf-8").read()
 if "KeepAliveService" not in s:
+    if "usesCleartextTraffic" not in s:
+        s = s.replace("<application", '<application android:usesCleartextTraffic="true"', 1)
     s = s.replace("</application>", '    <service android:name=".KeepAliveService" android:exported="false" android:foregroundServiceType="mediaPlayback" />\n    </application>', 1)
     perms = "".join('    <uses-permission android:name="android.permission.%s" />\n' % p for p in ("FOREGROUND_SERVICE", "FOREGROUND_SERVICE_MEDIA_PLAYBACK", "WAKE_LOCK", "POST_NOTIFICATIONS"))
     s = s.replace("</manifest>", perms + "</manifest>", 1)
